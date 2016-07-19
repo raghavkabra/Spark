@@ -1,0 +1,116 @@
+==== RDD BASICS =====
+
+==== EXERCISE 1 : Load Dividends File from Local
+
+inputRDD = sc.textFile("NYSE_dividends") 
+print inputRDD.count()
+
+==== EXERCISE 2 : Find Records containing "CATO" 
+
+CATO = inputRDD.filter(lambda x: "CATO" in x)
+print CATO.collect()
+
+==== EXERCISE 3 : Find Total Dividend declared by all companies
+
+div = inputRDD.map(lambda x: float((x.split("\t")[3]))
+print div.reduce(lambda x,y : x+y)
+
+==== EXERCISE 4 : USING aggregte() to find average dividend declared by all companies without using Map & Reduce
+
+sumCount = div.aggregate((0, 0),
+(lambda acc, value: (acc[0] + value, acc[1] + 1)),
+(lambda acc1, acc2: (acc1[0] + acc2[0], acc1[1] + acc2[1])))
+
+print sumCount[0] / float(sumCount[1])
+
+
+==== PAIR RDDs =====
+
+==== EXERCISE 1 : Top5 companies by total dividend declared
+
+dividend = inputRDD.map(lambda x: (x.split("\t")[1], float(x.split("\t")[3])))
+summed = dividend.reduceByKey(lambda x, y : x + y)
+flipped = summed.map(lambda (x,y) : (y,x))
+print flipped.sortByKey(0,1).take(5)
+
+
+==== EXERCISE 2 : Per-key average with reduceByKey() and mapValues()
+
+avg_div = dividend.mapValues(lambda x: (x, 1)).reduceByKey(lambda x, y: (x[0] + y[0], x[1] + y[1]))
+averaged = avg_div.mapValues(lambda (x, y) : x/y)
+print averaged.take(5)
+
+==== EXERCISE 3 : Per-key average with combineByKey()
+
+divCount = dividend.combineByKey((lambda x : (x,1)),
+(lambda x, y : (x[0] + y, x[1] + 1)),
+(lambda x, y : (x[0] + y[0], x[1] + y[1])))
+
+averagedCombined = divCount.mapValues(lambda (x, y) : x/y)
+averagedCombined.take(5)
+
+==== EXERCISE 4 :  WordCount in Spark
+
+rdd = sc.textFile("war_and_peace.txt")
+words = rdd.flatMap(lambda x: x.split(" "))
+result = words.map(lambda x: (x, 1)).reduceByKey(lambda x, y: x + y)
+result.saveAsTextFile("wordcount.out")
+
+==== EXERCISE 5 :  WordCount in Spark - FASTER Version with countByValue()
+
+result2 = rdd.flatMap(lambda x: x.split(" ")).countByValue()
+print result2
+
+* * * ==== FILE INPUT / OUTPUT =====  * * * 
+
+===== Eercise 1 : Loading & Saving CSV Data
+
+import csv
+import StringIO
+
+def loadRecord(line):
+	"""Parse a CSV line"""
+	input = StringIO.StringIO(line)
+	reader = csv.DictReader(input, fieldnames=["name", "favouriteAnimal"])
+	return reader.next()
+input = sc.textFile(inputFile).map(loadRecord)
+
+
+===== * SPARK-SQL * ======
+
+==== EXERCISE 2 : Read Employee Table into Spark-SQL
+
+from pyspark.sql import HiveContext
+hiveCtx = HiveContext(sc)
+rows = hiveCtx.sql("SELECT * FROM employee")
+ids = rows.map(lambda row: (row[0], row[1]))
+print ids.collect()
+
+firstRow = rows.first()
+print firstRow.name
+print firstRow.salary
+
+* * *  ==== SPARK STREAMING * * * =======
+
+===== EXERCISE 1 - Streaming Filter for Lines Containing "ERROR"
+
+import sys
+
+from pyspark import SparkContext
+from pyspark.streaming import StreamingContext
+
+   
+ssc = StreamingContext(sc, 1)
+lines = ssc.socketTextStream("localhost", 7777)
+error = lines.filter(lambda x: "ERROR" in x)
+error.pprint()
+ssc.start()
+ssc.awaitTermination()
+
+===== EXERCISE -2 - Streaming Wordcount with Flume Based Receiver (Push Approach)
+
+~/spark/bin/spark-submit --packages org.apache.spark:spark-streaming-flume_2.10:1.6.2  flume_wordcount.py localhost 7777
+
+
+
+
